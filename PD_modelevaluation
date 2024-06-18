@@ -1,0 +1,226 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score, classification_report
+from imblearn.over_sampling import SMOTE
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def remove_highly_correlated_features(df, threshold=0.9):
+    # Create correlation matrix
+    correlation_matrix = df.corr().abs()
+
+    # Select upper triangle of correlation matrix
+    upper = correlation_matrix.where(np.triu(np.ones(correlation_matrix.shape), k=1).astype(bool))
+
+    # Find features with correlation greater than the threshold
+    to_drop = [column for column in upper.columns if any(upper[column] > threshold)]
+    to_drop.append('name')
+
+    # Drop the highly correlated features
+    df_filtered = df.drop(to_drop, axis=1)
+
+    return df_filtered
+
+# Load the dataset
+df = pd.read_csv('parkinsons_voice.csv')
+
+# Remove highly correlated features
+df_no_corr = remove_highly_correlated_features(df)
+
+# Split the data into features and target variable
+X = df_no_corr.drop('status', axis=1)
+y = df_no_corr['status']
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Apply SMOTE to balance the class distribution
+smote = SMOTE(random_state=42)
+X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
+
+# Train Random Forest model before hyperparameter tuning
+# Introduce class weights to handle class imbalance
+model_rf_before = RandomForestClassifier(class_weight='balanced', random_state=42)
+model_rf_before.fit(X_train_smote, y_train_smote)
+
+# Predictions on the testing set before hyperparameter tuning
+y_pred_rf_before = model_rf_before.predict(X_test)
+
+# Calculate accuracy before hyperparameter tuning
+accuracy_rf_before = accuracy_score(y_test, y_pred_rf_before)
+
+# Display individual accuracy and classification report before hyperparameter tuning
+print("\nRandom Forest (Before Tuning):")
+print(f"Accuracy: {accuracy_rf_before*100:.4f}%")
+print("Classification Report:\n", classification_report(y_test, y_pred_rf_before))
+
+# Train XGBoost model before hyperparameter tuning
+# Introduce scale_pos_weight to handle class imbalance
+model_xgb_before = XGBClassifier(scale_pos_weight=(len(y_train) - y_train.sum()) / y_train.sum(), random_state=42)
+model_xgb_before.fit(X_train_smote, y_train_smote)
+
+# Predictions on the testing set before hyperparameter tuning
+y_pred_xgb_before = model_xgb_before.predict(X_test)
+
+# Calculate accuracy before hyperparameter tuning
+accuracy_xgb_before = accuracy_score(y_test, y_pred_xgb_before)
+
+# Display individual accuracy and classification report before hyperparameter tuning
+print("\nXGBoost (Before Tuning):")
+print(f"Accuracy: {accuracy_xgb_before*100:.4f}%")
+print("Classification Report:\n", classification_report(y_test, y_pred_xgb_before))
+
+# Train Decision Tree model before hyperparameter tuning
+model_dt_before = DecisionTreeClassifier(random_state=42)
+model_dt_before.fit(X_train_smote, y_train_smote)
+
+# Predictions on the testing set before hyperparameter tuning
+y_pred_dt_before = model_dt_before.predict(X_test)
+
+# Calculate accuracy before hyperparameter tuning
+accuracy_dt_before = accuracy_score(y_test, y_pred_dt_before)
+
+# Display individual accuracy and classification report before hyperparameter tuning
+print("\nDecision Tree (Before Tuning):")
+print(f"Accuracy: {accuracy_dt_before*100:.4f}%")
+print("Classification Report:\n", classification_report(y_test, y_pred_dt_before))
+
+# Display the best hyperparameters
+print("\nBest Random Forest Model:")
+print({'bootstrap': True, 'ccp_alpha': 0.0, 'class_weight': 'balanced', 'criterion': 'gini', 'max_depth': 20, 'max_features': 'sqrt', 'max_leaf_nodes': None, 'max_samples': None, 'min_impurity_decrease': 0.0, 'min_samples_leaf': 2, 'min_samples_split': 10, 'min_weight_fraction_leaf': 0.0, 'n_estimators': 100, 'n_jobs': None, 'oob_score': False, 'verbose': 0, 'warm_start': False})
+print()
+
+print("Best XGBoost Model:")
+print({'objective': 'binary:logistic', 'base_score': None, 'booster': None, 'callbacks': None, 'colsample_bylevel': None, 'colsample_bynode': None, 'colsample_bytree': 1.0, 'device': None, 'early_stopping_rounds': None, 'enable_categorical': False, 'eval_metric': None, 'feature_types': None, 'gamma': 0.1, 'grow_policy': None, 'importance_type': None, 'interaction_constraints': None, 'learning_rate': 0.3, 'max_bin': None, 'max_cat_threshold': None, 'max_cat_to_onehot': None, 'max_delta_step': None, 'max_depth': 7, 'max_leaves': None, 'min_child_weight': None, 'missing': np.nan, 'monotone_constraints': None, 'multi_strategy': None, 'n_estimators': 50, 'n_jobs': None, 'num_parallel_tree': None, 'reg_alpha': None, 'reg_lambda': None, 'sampling_method': None, 'scale_pos_weight': (len(y_train) - y_train.sum()) / y_train.sum(), 'subsample': 0.8, 'tree_method': None, 'validate_parameters': None, 'verbosity': None})
+print()
+
+print("Best Decision Tree Model:")
+print({'ccp_alpha': 0.0, 'class_weight': None, 'criterion': 'gini', 'max_depth': 10, 'max_features': 'auto', 'max_leaf_nodes': None, 'min_impurity_decrease': 0.0, 'min_samples_leaf': 1, 'min_samples_split': 2, 'min_weight_fraction_leaf': 0.0, 'splitter': 'random'})
+print()
+
+# Train Random Forest model after hyperparameter tuning
+best_model_rf = RandomForestClassifier(**{'bootstrap': True, 'ccp_alpha': 0.0, 'class_weight': 'balanced', 'criterion': 'gini', 'max_depth': 20, 'max_features': 'sqrt', 'max_leaf_nodes': None, 'max_samples': None, 'min_impurity_decrease': 0.0, 'min_samples_leaf': 2, 'min_samples_split': 10, 'min_weight_fraction_leaf': 0.0, 'n_estimators': 100, 'n_jobs': None, 'oob_score': False, 'verbose': 0, 'warm_start': False})
+best_model_rf.fit(X_train_smote, y_train_smote)
+
+# Train XGBoost model after hyperparameter tuning
+best_model_xgb = XGBClassifier(**{'objective': 'binary:logistic', 'base_score': None, 'booster': None, 'callbacks': None, 'colsample_bylevel': None, 'colsample_bynode': None, 'colsample_bytree': 1.0, 'device': None, 'early_stopping_rounds': None, 'enable_categorical': False, 'eval_metric': None, 'feature_types': None, 'gamma': 0.1, 'grow_policy': None, 'importance_type': None, 'interaction_constraints': None, 'learning_rate': 0.3, 'max_bin': None, 'max_cat_threshold': None, 'max_cat_to_onehot': None, 'max_delta_step': None, 'max_depth': 7, 'max_leaves': None, 'min_child_weight': None, 'missing': np.nan, 'monotone_constraints': None, 'multi_strategy': None, 'n_estimators': 50, 'n_jobs': None, 'num_parallel_tree': None, 'reg_alpha': None, 'reg_lambda': None, 'sampling_method': None, 'scale_pos_weight': (len(y_train) - y_train.sum()) / y_train.sum(), 'subsample': 0.8, 'tree_method': None, 'validate_parameters': None, 'verbosity': None})
+best_model_xgb.fit(X_train_smote, y_train_smote)
+
+# Train Decision Tree model after hyperparameter tuning
+best_model_dt = DecisionTreeClassifier(**{'ccp_alpha': 0.0, 'class_weight': None, 'criterion': 'gini', 'max_depth': 10, 'max_features': 'auto', 'max_leaf_nodes': None, 'min_impurity_decrease': 0.0, 'min_samples_leaf': 1, 'min_samples_split': 2, 'min_weight_fraction_leaf': 0.0, 'splitter': 'random'})
+best_model_dt.fit(X_train_smote, y_train_smote)
+
+# Predictions on the testing set after hyperparameter tuning
+y_pred_rf = best_model_rf.predict(X_test)
+y_pred_xgb = best_model_xgb.predict(X_test)
+y_pred_dt = best_model_dt.predict(X_test)
+
+# Calculate accuracies after hyperparameter tuning
+accuracy_rf = accuracy_score(y_test, y_pred_rf)
+accuracy_xgb = accuracy_score(y_test, y_pred_xgb)
+accuracy_dt = accuracy_score(y_test, y_pred_dt)
+
+# Display individual accuracies and classification reports after hyperparameter tuning
+print("\nRandom Forest (After Tuning):")
+print(f"Accuracy: {accuracy_rf*100:.4f}%")
+print("Classification Report:\n", classification_report(y_test, y_pred_rf))
+
+print("\nXGBoost (After Tuning):")
+print(f"Accuracy: {accuracy_xgb*100:.4f}%")
+print("Classification Report:\n", classification_report(y_test, y_pred_xgb))
+
+print("\nDecision Tree (After Tuning):")
+print(f"Accuracy: {accuracy_dt*100:.4f}%")
+print("Classification Report:\n", classification_report(y_test, y_pred_dt))
+
+# Compare accuracies with a bar chart
+accuracies_before = [accuracy_rf_before, accuracy_xgb_before, accuracy_dt_before]
+accuracies_after = [accuracy_rf, accuracy_xgb, accuracy_dt]
+models = ['Random Forest', 'XGBoost', 'Decision Tree']
+
+plt.figure(figsize=(12, 6))
+
+plt.subplot(1, 2, 1)
+sns.barplot(x=models, y=accuracies_before)
+plt.title('Model Accuracies Before Hyperparameter Tuning and SMOTE')
+plt.ylim([0, 1])
+
+plt.subplot(1, 2, 2)
+sns.barplot(x=models, y=accuracies_after)
+plt.title('Model Accuracies After Hyperparameter Tuning and SMOTE')
+plt.ylim([0, 1])
+
+plt.tight_layout()
+plt.show()
+
+from sklearn.metrics import confusion_matrix
+
+# Function to display confusion matrix
+def plot_confusion_matrix(y_true, y_pred, title):
+    cm = confusion_matrix(y_true, y_pred)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False)
+    plt.title(title)
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.show()
+
+# Confusion matrix before tuning - Random Forest
+plot_confusion_matrix(y_test, y_pred_rf_before, 'Random Forest (Before Tuning)')
+
+# Confusion matrix before tuning - XGBoost
+plot_confusion_matrix(y_test, y_pred_xgb_before, 'XGBoost (Before Tuning)')
+
+# Confusion matrix before tuning - Decision Tree
+plot_confusion_matrix(y_test, y_pred_dt_before, 'Decision Tree (Before Tuning)')
+
+# Confusion matrix after tuning - Random Forest
+plot_confusion_matrix(y_test, y_pred_rf, 'Random Forest (After Tuning)')
+
+# Confusion matrix after tuning - XGBoost
+plot_confusion_matrix(y_test, y_pred_xgb, 'XGBoost (After Tuning)')
+
+# Confusion matrix after tuning - Decision Tree
+plot_confusion_matrix(y_test, y_pred_dt, 'Decision Tree (After Tuning)')
+
+
+from sklearn.metrics import confusion_matrix
+
+# Function to display confusion matrix as a list of lists
+def get_confusion_matrix(y_true, y_pred):
+    cm = confusion_matrix(y_true, y_pred)
+    return cm.tolist()
+
+# Confusion matrix before tuning - Random Forest
+cm_rf_before = get_confusion_matrix(y_test, y_pred_rf_before)
+print("\nConfusion Matrix (Random Forest Before Tuning):")
+print(cm_rf_before)
+
+# Confusion matrix before tuning - XGBoost
+cm_xgb_before = get_confusion_matrix(y_test, y_pred_xgb_before)
+print("\nConfusion Matrix (XGBoost Before Tuning):")
+print(cm_xgb_before)
+
+# Confusion matrix before tuning - Decision Tree
+cm_dt_before = get_confusion_matrix(y_test, y_pred_dt_before)
+print("\nConfusion Matrix (Decision Tree Before Tuning):")
+print(cm_dt_before)
+
+# Confusion matrix after tuning - Random Forest
+cm_rf = get_confusion_matrix(y_test, y_pred_rf)
+print("\nConfusion Matrix (Random Forest After Tuning):")
+print(cm_rf)
+
+# Confusion matrix after tuning - XGBoost
+cm_xgb = get_confusion_matrix(y_test, y_pred_xgb)
+print("\nConfusion Matrix (XGBoost After Tuning):")
+print(cm_xgb)
+
+# Confusion matrix after tuning - Decision Tree
+cm_dt = get_confusion_matrix(y_test, y_pred_dt)
+print("\nConfusion Matrix (Decision Tree After Tuning):")
+print(cm_dt)
+
